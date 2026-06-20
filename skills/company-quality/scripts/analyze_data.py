@@ -288,7 +288,7 @@ def analyze_growth_quality() -> dict:
     # 评分（满分25：营收6 + 利润6 + 持续性7 + 质量6）
     revenue_score = score_band(rev_g, [(30, 6), (15, 5), (5, 3), (0, 1), (-100, 0)])
     profit_score = score_band(prof_g, [(30, 6), (15, 5), (5, 3), (0, 1), (-100, 0)])
-    sustainability_score = score_band(avg_rev_growth, [(20, 7), (10, 5), (0, 2), (-100, 0)])
+    sustainability_score = score_band(avg_rev_growth, [(20, 7), (10, 5), (0, 2), (-5, 1), (-100, 0)])
     quality_score = 6 if quality_ratio > 5 else (3 if quality_ratio > 0 else 0)
 
     total_score = min(revenue_score + profit_score + sustainability_score + quality_score, 25)
