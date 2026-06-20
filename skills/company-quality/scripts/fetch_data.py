@@ -29,6 +29,7 @@ _QUERY_SCRIPT = SCRIPT_DIR / "query.py"
 _ALLOWED_APIS = frozenset([
     "getDPubComInfo1ByCond-G",          # 基本信息
     "getPubComInfoByCond-G",            # 公司简介
+    "getStkBasicInfoByCond-G",          # 个股基本信息（取上市日期，用于次新股判定）
     "getComFinMainIndxByCond-G",        # 主要会计数据
     "getDComAuditOpinNewByCond-G",      # 审计意见
     "getDComProfMakeQatByCond-G",       # 盈利质量预警
@@ -208,7 +209,17 @@ def main():
     else:
         save("company_profile.json", [])
 
-    print(f"  公司: {company_name}, 行业: {sw_industry}")
+    # 上市日期（用于次新股判定：上市不足1年豁免分红项）
+    list_date = ""
+    try:
+        stk_basic = call_api("getStkBasicInfoByCond-G", {"stkCode": stk_code})
+        if stk_basic.get("result"):
+            list_date = stk_basic["result"][0].get("LIST_DATE", "") or ""
+    except Exception as e:
+        print(f"  [WARN] 上市日期获取失败: {e}")
+    save("list_date.json", [{"LIST_DATE": list_date}] if list_date else [])
+
+    print(f"  公司: {company_name}, 行业: {sw_industry}, 上市日期: {list_date or '未知'}")
 
     meta = {
         "stk_code": stk_code,

@@ -10,6 +10,7 @@
 
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -549,11 +550,37 @@ def analyze_governance() -> dict:
     gov_bonus = 1 if has_incentive else 0
     audit_score = 2 if len(audit_firms) <= 2 and len(audit) > 0 else 1
 
-    total_score = ctrl_score + div_score + pledge_score + gov_bonus + audit_score
+    # 次新股判定：上市不足1年，分红项豁免（新股尚处成长期，未分红属正常，不应扣分）
+    list_date_raw = ""
+    try:
+        ld = load("list_date.json")
+        if ld:
+            list_date_raw = str(ld[0].get("LIST_DATE", ""))[:10]
+    except Exception:
+        pass
+
+    is_new_stock = False
+    list_date = list_date_raw or None
+    if list_date_raw:
+        try:
+            days_since_list = (datetime.now() - datetime.strptime(list_date_raw, "%Y-%m-%d")).days
+            is_new_stock = 0 <= days_since_list < 365
+        except ValueError:
+            is_new_stock = False
+
+    if is_new_stock:
+        # 豁免分红项：从总分和分母中扣除分红（满分 10 → 7）
+        total_score = ctrl_score + pledge_score + gov_bonus + audit_score
+        max_score = 7
+        div_scoring = {"score": 0, "max": 0, "reason": f"次新股豁免（上市日期{list_date_raw}，不足1年）"}
+    else:
+        total_score = ctrl_score + div_score + pledge_score + gov_bonus + audit_score
+        max_score = 10
+        div_scoring = {"score": div_score, "max": 3, "reason": f"近5年分红{div_count}次"}
 
     return {
         "score": total_score,
-        "max_score": 10,
+        "max_score": max_score,
         "actual_controller": controller_name,
         "control_ratio": control_ratio,
         "top10_shareholders": [
@@ -570,9 +597,11 @@ def analyze_governance() -> dict:
         "audit_firms": list(audit_firms),
         "insider_trading": recent_changes,
         "has_insider_reduction": has_reduction,
+        "list_date": list_date,
+        "is_new_stock": is_new_stock,
         "scoring": {
             "control_structure": {"score": ctrl_score, "max": 3, "reason": f"实控人持股{control_ratio:.1f}%"},
-            "dividend": {"score": div_score, "max": 3, "reason": f"近5年分红{div_count}次"},
+            "dividend": div_scoring,
             "pledge_risk": {"score": pledge_score, "max": 1, "reason": f"质押记录{pledge_count}条，十大股东质押{len(top10_pledge_info)}人"},
             "governance_bonus": {"score": gov_bonus, "max": 1, "reason": f"股权激励={'有' if has_incentive else '无'}"},
             "audit_continuity": {"score": audit_score, "max": 2, "reason": f"审计机构{len(audit_firms)}家"},
