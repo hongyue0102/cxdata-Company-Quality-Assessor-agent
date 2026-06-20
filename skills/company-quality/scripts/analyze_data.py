@@ -569,14 +569,15 @@ def analyze_governance() -> dict:
             is_new_stock = False
 
     if is_new_stock:
-        # 豁免分红项：从总分和分母中扣除分红（满分 10 → 7）
-        total_score = ctrl_score + pledge_score + gov_bonus + audit_score
-        max_score = 7
-        div_scoring = {"score": 0, "max": 0, "reason": f"次新股豁免（上市日期{list_date_raw}，不足1年）"}
+        # 新股豁免分红项：该项直接按满分计入（3/3），不扣分。
+        # 分母保持 10 不变，确保所有公司总分分母统一为 100，横向可比。
+        div_score = 3
+        div_scoring = {"score": 3, "max": 3, "reason": f"新股豁免（上市日期{list_date_raw}，不足1年，按满分计）"}
     else:
-        total_score = ctrl_score + div_score + pledge_score + gov_bonus + audit_score
-        max_score = 10
         div_scoring = {"score": div_score, "max": 3, "reason": f"近5年分红{div_count}次"}
+
+    total_score = ctrl_score + div_score + pledge_score + gov_bonus + audit_score
+    max_score = 10
 
     return {
         "score": total_score,
