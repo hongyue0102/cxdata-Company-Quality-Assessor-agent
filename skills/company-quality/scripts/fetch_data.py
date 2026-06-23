@@ -16,6 +16,7 @@
 """
 
 import json
+import re
 import subprocess
 import sys
 import time
@@ -23,6 +24,16 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 _QUERY_SCRIPT = SCRIPT_DIR / "query.py"
+
+# 控制字符与换行（防日志/print 注入）
+_CONTROL_RE = re.compile(r"[\r\n\t\x00-\x1f\x7f]")
+
+
+def _safe_log(value) -> str:
+    """净化用于 print/日志的字段，剥离换行等控制字符，防止伪造日志条目"""
+    if value is None:
+        return ""
+    return _CONTROL_RE.sub(" ", str(value))
 
 # ========== 业务接口（硬编码，只允许以下接口） ==========
 
@@ -173,7 +184,7 @@ def main():
         sys.exit(1)
 
     raw_code = sys.argv[1].strip()
-    stk_code = raw_code.split(".")[0]
+    stk_code = _safe_log(raw_code.split(".")[0])
     t_start = time.time()
 
     print(f"=== 公司质地打分 - 精简取数 ===")
@@ -219,7 +230,7 @@ def main():
         print(f"  [WARN] 上市日期获取失败: {e}")
     save("list_date.json", [{"LIST_DATE": list_date}] if list_date else [])
 
-    print(f"  公司: {company_name}, 行业: {sw_industry}, 上市日期: {list_date or '未知'}")
+    print(f"  公司: {_safe_log(company_name)}, 行业: {_safe_log(sw_industry)}, 上市日期: {_safe_log(list_date) or '未知'}")
 
     meta = {
         "stk_code": stk_code,

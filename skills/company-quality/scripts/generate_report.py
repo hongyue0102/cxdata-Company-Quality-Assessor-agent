@@ -22,10 +22,31 @@ LLM 只需在每个「**AI 解读：**」槽位补充文字解读。
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
+
+
+# ========== 输入净化（参照 cxdata-stock-analysis-agent/analyzer.py） ==========
+
+# 控制字符与换行（防报告结构破坏 / 日志注入）
+_CONTROL_RE = re.compile(r"[\r\n\t\x00-\x1f\x7f]")
+
+
+def _md(value) -> str:
+    """
+    净化拼入 markdown 报告的远端/用户可控字段（公司名、行业、股东名、扣分项等），
+    剥离控制字符并转义 HTML 特殊字符，防止报告渲染为 HTML 时触发 XSS。
+    """
+    if value is None:
+        return ""
+    cleaned = _CONTROL_RE.sub(" ", str(value))
+    return (cleaned.replace("&", "&amp;")
+                   .replace("<", "&lt;")
+                   .replace(">", "&gt;")
+                   .replace('"', "&quot;"))
 
 
 # ========== 辅助格式化函数（参照 analyzer.py:127-153） ==========
@@ -127,7 +148,7 @@ def _build_header(a, lines):
     stk_code = meta.get("stk_code", "") or "（代码缺失）"
     fetch_time = meta.get("fetch_time", "")
 
-    lines.append(f"# 【公司质地评估报告】{company_name}（{stk_code}）")
+    lines.append(f"# 【公司质地评估报告】{_md(company_name)}（{_md(stk_code)}）")
     lines.append("")
     lines.append(f"> 数据获取时间：{fetch_time} | 数据来源：财新数据（cxdata） | 基于公开财务数据推演，不构成任何投资建议")
     lines.append("")
@@ -151,8 +172,8 @@ def _build_section1_score(a, lines):
     lines.append("| 项目 | 数据 |")
     lines.append("|------|------|")
     lines.append(f"| **质地总评** | {_fmt_score(final_score, max_score)} |")
-    lines.append(f"| **质地等级** | {grade} |")
-    lines.append(f"| **所属行业** | {industry} |")
+    lines.append(f"| **质地等级** | {_md(grade)} |")
+    lines.append(f"| **所属行业** | {_md(industry)} |")
     lines.append(f"| **风险扣分** | {_fmt_score(total_deduction, max_deduction)} |")
     lines.append("")
     lines.append("> **一句话定性：**")
@@ -181,10 +202,10 @@ def _build_section2_business(a, lines):
     lines.append("")
     lines.append("| 指标 | 数据 |")
     lines.append("|------|------|")
-    lines.append(f"| 最大业务板块 | {top_business} |")
+    lines.append(f"| 最大业务板块 | {_md(top_business)} |")
     lines.append(f"| 最大业务占比 | {_fmt_pct(top_business_ratio)} |")
     lines.append(f"| 加权毛利率 | {_fmt_pct(avg_gross_margin)} |")
-    lines.append(f"| 主营业务 | {main_business if main_business else 'N/A'} |")
+    lines.append(f"| 主营业务 | {_md(main_business) if main_business else 'N/A'} |")
     lines.append("")
 
     # 收入结构（按行业）
@@ -198,7 +219,7 @@ def _build_section2_business(a, lines):
             name = row.get("name", "")
             rev = row.get("revenue_yi")
             margin = row.get("margin")
-            lines.append(f"| {name} | {_fmt_num(rev)} | {_fmt_pct(margin)} |")
+            lines.append(f"| {_md(name)} | {_fmt_num(rev)} | {_fmt_pct(margin)} |")
     else:
         lines.append("| （无数据） | - | - |")
     lines.append("")
@@ -213,7 +234,7 @@ def _build_section2_business(a, lines):
         for row in rev_region:
             name = row.get("name", "")
             rev = row.get("revenue_yi")
-            lines.append(f"| {name} | {_fmt_num(rev)} |")
+            lines.append(f"| {_md(name)} | {_fmt_num(rev)} |")
     else:
         lines.append("| （无数据） | - |")
     lines.append("")
@@ -246,7 +267,7 @@ def _build_section3_competitive(a, lines):
     lines.append("")
     lines.append("| 指标 | 数据 |")
     lines.append("|------|------|")
-    lines.append(f"| 所属行业 | {industry} |")
+    lines.append(f"| 所属行业 | {_md(industry)} |")
     lines.append(f"| 行业内公司总数 | {_fmt_num(total_companies, 0) if total_companies is not None else 'N/A'} 家 |")
     lines.append(f"| 年度 ROE | {_fmt_pct(annual_roe)} |")
     lines.append(f"| 最新报告期 ROE | {_fmt_pct(latest_roe)} |")
@@ -365,8 +386,8 @@ def _build_section5_financial(a, lines):
     lines.append(f"| 总资产（亿元） | {_fmt_num(fq.get('total_assets_yi'))} |")
     lines.append(f"| 总负债（亿元） | {_fmt_num(fq.get('total_liabilities_yi'))} |")
     lines.append(f"| 应收账款占比 | {_fmt_pct(fq.get('accounts_receivable_to_assets'))} |")
-    lines.append(f"| 盈利质量预警 | {fq.get('profit_quality_warn', 'N/A') or 'N/A'} |")
-    lines.append(f"| 审计意见 | {fq.get('audit_type', 'N/A') or 'N/A'} |")
+    lines.append(f"| 盈利质量预警 | {_md(fq.get('profit_quality_warn', 'N/A') or 'N/A')} |")
+    lines.append(f"| 审计意见 | {_md(fq.get('audit_type', 'N/A') or 'N/A')} |")
     lines.append("")
     lines.append("**AI 解读：**")
     lines.append("")
@@ -388,7 +409,7 @@ def _build_section6_governance(a, lines):
     lines.append("")
     lines.append("| 指标 | 数据 |")
     lines.append("|------|------|")
-    lines.append(f"| 实际控制人 | {gv.get('actual_controller', 'N/A') or 'N/A'} |")
+    lines.append(f"| 实际控制人 | {_md(gv.get('actual_controller', 'N/A') or 'N/A')} |")
     lines.append(f"| 实控人持股比例 | {_fmt_pct(gv.get('control_ratio'))} |")
     lines.append(f"| 质押记录数 | {_fmt_num(gv.get('pledge_count'), 0) if gv.get('pledge_count') is not None else 'N/A'} 条 |")
     lines.append(f"| 历史分红次数 | {_fmt_num(gv.get('dividend_count'), 0) if gv.get('dividend_count') is not None else 'N/A'} 次 |")
@@ -408,14 +429,14 @@ def _build_section6_governance(a, lines):
             rank = row.get("rank", "")
             name = row.get("name", "")
             ratio = row.get("ratio")
-            lines.append(f"| {rank} | {name} | {_fmt_pct(ratio)} |")
+            lines.append(f"| {_md(rank)} | {_md(name)} | {_fmt_pct(ratio)} |")
     else:
         lines.append("| （无数据） | - | - |")
     lines.append("")
 
     # 分红年份
     div_years = gv.get("dividend_years", []) or []
-    lines.append(f"**历史分红年份：** {', '.join(div_years) if div_years else '无'}")
+    lines.append(f"**历史分红年份：** {', '.join(_md(y) for y in div_years) if div_years else '无'}")
     lines.append("")
     lines.append("**AI 解读：**")
     lines.append("")
@@ -441,7 +462,7 @@ def _build_section7_risk(a, lines):
             name = item.get("item", "")
             ded = item.get("deduction")
             detail = item.get("detail", "")
-            lines.append(f"| {name} | -{_fmt_num(ded, 0) if ded is not None else 'N/A'} | {detail} |")
+            lines.append(f"| {_md(name)} | -{_fmt_num(ded, 0) if ded is not None else 'N/A'} | {_md(detail)} |")
     else:
         lines.append("| 无扣分项 | 0 | 本次评估未触发风险扣分项 |")
     lines.append("")
