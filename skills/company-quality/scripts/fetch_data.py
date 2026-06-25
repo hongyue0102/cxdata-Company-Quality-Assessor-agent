@@ -90,6 +90,33 @@ def _session_confirm():
         raise RuntimeError(f"session confirm 失败: {result.stderr[:200]}")
 
 
+def _session_start():
+    """调用 query.py session start，重置本轮积分账本（规范：记账以 session summary 为准）。"""
+    try:
+        cmd = [sys.executable, str(_QUERY_SCRIPT), "session", "start"]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=str(SCRIPT_DIR))
+        if result.returncode != 0:
+            print(f"  [WARN] session start 失败（不影响取数）: {result.stderr[:200]}")
+    except Exception as e:
+        print(f"  [WARN] session start 异常（不影响取数）: {e}")
+
+
+def _session_summary():
+    """调用 query.py session summary，输出本轮积分消耗汇总（以 query.py 记账为准）。"""
+    try:
+        cmd = [sys.executable, str(_QUERY_SCRIPT), "session", "summary"]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=str(SCRIPT_DIR))
+        if result.returncode != 0 or not result.stdout.strip():
+            return
+        data = json.loads(result.stdout)
+        if data.get("success"):
+            print(f"\n=== 积分消耗汇总（以 session summary 为准）===")
+            print(f"  计费调用次数: {data.get('call_count')}")
+            print(f"  累计消耗积分: {data.get('total_consumed')}")
+    except Exception as e:
+        print(f"  [WARN] session summary 异常: {e}")
+
+
 def call_api(api_id: str, params: dict) -> dict:
     """通过 query.py 调用业务接口（仅允许 _ALLOWED_APIS 中的接口）。
 
@@ -185,6 +212,16 @@ def main():
 
     raw_code = sys.argv[1].strip()
     stk_code = _safe_log(raw_code.split(".")[0])
+
+    # B 股排除（本 agent 仅分析 A 股）：
+    # 上交所 B 股 900 开头、深交所 B 股 200 开头，B 股计价/披露规则不同，直接拒绝。
+    if stk_code.startswith("900") or stk_code.startswith("200"):
+        print(f"[ERROR] {stk_code} 为 B 股代码，本 agent 仅支持 A 股分析，已拒绝。")
+        sys.exit(1)
+
+    # 规范：本轮首次业务调用前 session start，重置积分账本（记账以 query.py 为准）
+    _session_start()
+
     t_start = time.time()
 
     print(f"=== 公司质地打分 - 精简取数 ===")
@@ -368,6 +405,9 @@ def main():
     print(f"数据文件: {total_files} 个，其中 0 条: {len(zero_files)} 个")
     if zero_files:
         print(f"  缺失: {', '.join(zero_files)}")
+
+    # 规范：会话结束 session summary，输出本轮积分消耗（记账以 query.py 为准，不自行统计）
+    _session_summary()
 
 
 if __name__ == "__main__":

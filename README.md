@@ -125,6 +125,26 @@ cxdata-Company-Quality-Assessor-agent/
 
 ## 变更历史
 
+### 2026-06-25 对齐同事官方积分机制 + B股排除 + 安全加固 + venv 环境
+
+对齐 cxdata 另两个 agent（主线/股票分析），统一采用同事 6-24 官方积分机制，补齐安全加固与 B 股排除。
+
+**积分机制（对齐同事官方四件套）：**
+- 覆盖 query/common/cxda_cache_cli/auth 为同事 6-24 官方版
+- 记账改 `append_shared_text` 追加 `cxda_session_calls.jsonl`，天然并发安全无需锁；session_id 会话隔离
+- fetch_data 加 session start/summary 规范流程，积分以 session summary 为准
+- 验证：完整取数 jsonl 记账 38 次调用 / 1150 积分
+
+**B 股排除：**
+- fetch_data.py main 入口加 B 股校验（900/200 开头拒绝），仅分析 A 股
+
+**安全加固（叠加在同事四件套上，与前两个 agent 一致）：**
+- SSRF url 白名单、filename 校验、凭证加密（cred_crypto）、文件权限 0o600/0o700、异常脱敏、workspace 校验、cli 路径遍历防护、api_main 白名单
+
+**环境：**
+- 新建 .venv 并安装 cryptography/requests/pandas/python-dotenv（凭证加密依赖 cryptography）
+- AGENT.md 加「环境准备」说明，所有 python3 命令用 `.venv/bin/python3`
+
 ### 2026-06-17 新增 Agent 路由边界与用户使用指引
 
 - **问题**：新设备测试时，AI 在用户指令模糊（如"看看这家公司"、"这股票能不能买"）或指令只有代码没有"质地/基本面"关键词（如"分析下 600519"）时，会误调用主线分析 / 技术分析 / Wind 等其他 agent，导致公司质地 agent 失效或答非所问
