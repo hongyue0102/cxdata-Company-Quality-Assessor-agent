@@ -20,3 +20,6 @@ skills/company-quality/scripts/data/
 
 # 改动前备份目录（本地用，不提交）
 skills/*/scripts/_backup_*/
+
+# 历史归档脚本（含 auth.sh 等，触发火山【1001】可执行文件红线，不进交付包）
+**/_archive/

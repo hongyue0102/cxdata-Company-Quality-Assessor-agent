@@ -125,6 +125,22 @@ cxdata-Company-Quality-Assessor-agent/
 
 ## 变更历史
 
+### 2026-06-28 对照火山扫描清单全面加固 + 四件套与主线/股票 agent 对齐
+
+对照火山扫描清单（包体合规/人设/权限/代码安全/内容安全）逐项核查，公司质地 agent 此前只做了 1 项加固（cred_crypto 硬依赖），其余 7 项缺失。本次将核心四件套与主线/股票 agent 已验证的加固版对齐（认证机制同为 SMS、渠道码同为 CAXEN，代码同源），一次性获得全部 8 轮安全加固成果：
+
+**代码安全（替换为统一加固版）**：
+- `auth/common/query/cxda_cache_cli/cred_crypto` 与主线 agent 逐字对齐
+- 覆盖：cred_crypto 硬依赖、env RCE（拒 `..`/绝对路径/PYTHON 文件名校验）、凭证经 stdin 传递、SSRF path 规范化（unquote+normpath）、parse_params 黑名单归一化、_validate_api_id 白名单、私域 write 0o600+O_NOFOLLOW（TOCTOU）、auth 改 POST（phone/code 不进 query）
+
+**包体合规（对照清单【1001/1005】）**：
+- 移除全部 `_archive/`（34 个文件，含 11 个 `auth.sh` —— 火山【1001】可执行文件红线），`.gitignore` 新增 `**/_archive/`（本地保留归档，不进交付包）
+- `.env` 早已被 `.gitignore` 排除，无硬编码凭证
+
+**文档同步**：`AGENT.md` 认证调用改 stdin（JSON），与前两个 agent 一致
+
+**验证**：5 文件语法通过；安全加固 8 项核查全到位；变体自测（parse_params 大小写、api_id 路径遍历、env `..`、SSRF `../admin`）全过；query/auth 各命令 argparse 正常；fetch_data 经 subprocess 调 query.py 取数链路兼容
+
 ### 2026-06-25 对齐同事官方积分机制 + B股排除 + 安全加固 + venv 环境
 
 对齐 cxdata 另两个 agent（主线/股票分析），统一采用同事 6-24 官方积分机制，补齐安全加固与 B 股排除。
