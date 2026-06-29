@@ -125,6 +125,10 @@ cxdata-Company-Quality-Assessor-agent/
 
 ## 变更历史
 
+### 2026-06-29 硬编码凭证：cred_crypto 密钥派生退化检测（同步主线）
+
+cred_crypto.py 与主线同源（差异 0），`_derive_key()` 在 host/user 全空（容器环境）时退化成固定弱密钥。同步主线修复：host/user 均空时拒绝生成密钥。三 agent 同步。
+
 ### 2026-06-29 路径遍历补漏：list_files / _get_skill_path 的 skill_name 校验（同步主线）
 
 火山扫描报 `cxda_cache_cli.py` 的 `list_files()`/`_get_skill_path()` 未校验 skill_name（`../etc` 可列出/创建任意目录）。此前只加固了 `_get_file_path`。同步主线修复：新增 `_SAFE_NAME_RE` + `_validate_skill_name()`，`_get_skill_path`/`list_files`/`_get_file_path` 三入口统一校验。
