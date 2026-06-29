@@ -125,6 +125,12 @@ cxdata-Company-Quality-Assessor-agent/
 
 ## 变更历史
 
+### 2026-06-29 路径遍历补漏：list_files / _get_skill_path 的 skill_name 校验（同步主线）
+
+火山扫描报 `cxda_cache_cli.py` 的 `list_files()`/`_get_skill_path()` 未校验 skill_name（`../etc` 可列出/创建任意目录）。此前只加固了 `_get_file_path`。同步主线修复：新增 `_SAFE_NAME_RE` + `_validate_skill_name()`，`_get_skill_path`/`list_files`/`_get_file_path` 三入口统一校验。
+
+**验证**：语法通过；8 个路径遍历变体全拦截，合法名不误伤
+
 ### 2026-06-28 对照火山扫描清单全面加固 + 四件套与主线/股票 agent 对齐
 
 对照火山扫描清单（包体合规/人设/权限/代码安全/内容安全）逐项核查，公司质地 agent 此前只做了 1 项加固（cred_crypto 硬依赖），其余 7 项缺失。本次将核心四件套与主线/股票 agent 已验证的加固版对齐（认证机制同为 SMS、渠道码同为 CAXEN，代码同源），一次性获得全部 8 轮安全加固成果：
