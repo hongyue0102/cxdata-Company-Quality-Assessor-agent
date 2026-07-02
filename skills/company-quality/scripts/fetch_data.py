@@ -299,8 +299,18 @@ def main():
     # ===== 步骤4: 主营构成 + 财务附注（商业模式/财务质量/风险扣分） =====
     print("\n[4/9] 主营构成与附注...")
 
+    latest_end_date = main_acct[0].get("END_DATE", "") if main_acct else ""
+    latest_annual_date = ""
+    for r in main_acct:
+        d = str(r.get("END_DATE", ""))
+        if d.endswith("-12-31"):
+            latest_annual_date = d
+            break
+    mb_params = {"stkCode": stk_code, "sheetMarkPar": "1"}
+    if latest_annual_date:
+        mb_params["endDate"] = latest_annual_date
     mb_data = fetch_all_pages("getComFinNoteMainBusiByCond-G",
-                              {"stkCode": stk_code, "endDate": "2024-12-31", "sheetMarkPar": "1"})
+                              mb_params)
     save("main_business_breakdown.json", mb_data)
 
     # 资产负债表附注（应收账款等），只拉最新一期

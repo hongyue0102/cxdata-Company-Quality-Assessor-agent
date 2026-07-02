@@ -120,6 +120,16 @@ cd {Agent目录}/skills/company-quality/scripts && python3 auth.py status
 
 ### Step 2: 数据获取
 
+**⚠️ 编码前置规则：读取 API 文档**
+
+修改 `fetch_data.py`、`analyze_data.py` 等涉及 API 数据字段处理的代码时，**必须先读取对应 API 的 references 文档**（位于各 skill 的 `references/` 目录下），按文档中定义的字段名和含义编码，禁止凭字段名猜测。典型教训：
+
+| 错误 | 原因 | 正确做法 |
+|------|------|----------|
+| 用 `PLE_VOL` 取质押股数 | 该字段属于十大股东接口，质押接口应用 `PLE_SHARE` | 先读 `getDComSharePleByCond-G.md` 确认字段 |
+| 把 `DIV_TAX_RMB` 当每股金额 | 文档明确标注"每10股/份"，需除以10 | 先读 `getDComDivImplByCond-G.md` 确认单位 |
+| 硬编码 `endDate: "2024-12-31"` | 应动态取最新年报日期 | 从已有数据推导，不硬编码 |
+
 **会话开始**（本轮首次调用 fetch_data.py 前，重置积分账本）：
 
 ```bash

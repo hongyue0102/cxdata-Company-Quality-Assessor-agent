@@ -140,7 +140,6 @@ def analyze_business_model() -> dict:
     return {
         "score": total_score,
         "max_score": 20,
-        "business_scope": scope[:200] if scope else "",
         "main_business": main_bus[:200] if main_bus else "",
         "top_business": by_industry[0].get("PRO_NAME_NEW", "") if by_industry else "",
         "top_business_ratio": round(top1_ratio, 1),
@@ -148,18 +147,12 @@ def analyze_business_model() -> dict:
         "revenue_by_industry": [
             {"name": r.get("PRO_NAME_NEW", ""), "revenue_yi": round(safe_float(r.get("MAIN_BUSI_INCO")) / 1e8, 2),
              "margin": round(safe_float(r.get("GROSS_MARG")) * 100, 2)}
-            for r in by_industry[:5]
+            for r in by_industry
         ],
-        "revenue_by_product": product_breakdown[:5],
-        "core_products": core_products[:3],
         "revenue_by_region": [
             {"name": r.get("PRO_NAME_NEW", ""), "revenue_yi": round(safe_float(r.get("MAIN_BUSI_INCO")) / 1e8, 2)}
-            for r in by_region[:3]
+            for r in by_region
         ],
-        "scoring": {
-            "concentration": {"score": concentration_score, "max": 15, "reason": f"最大业务占比{top1_ratio:.1f}%"},
-            "margin": {"score": margin_score, "max": 5, "reason": f"加权毛利率{avg_margin*100:.2f}%"},
-        }
     }
 
 
@@ -333,11 +326,8 @@ def analyze_financial_quality() -> dict:
     profit_quality = load("indicator_profit_quality.json")
     balance_notes = load("balance_sheet_notes.json")
 
-    # 年报数据（用于评分基准）
+    # 年报数据
     latest = get_latest_period(main_data, prefer_annual=True)
-
-    # 最新报告期数据（用于展示当前状态）
-    latest_all = get_latest_period(main_data, prefer_annual=False)
 
     revenue = safe_float(latest.get("OPER_INC"))
     net_profit = safe_float(latest.get("NTPRO_PARE_COM"))
@@ -348,8 +338,8 @@ def analyze_financial_quality() -> dict:
     debt_ratio = safe_float(latest.get("DEBT_RATIO"))
     eps = safe_float(latest.get("BAS_EPS"))
 
-    # 最新报告期的负债率
-    latest_debt_ratio = safe_float(latest_all.get("DEBT_RATIO")) if latest_all else debt_ratio
+    # 最新报告期的负债率（统一用年报，与同表其他指标口径一致）
+    latest_debt_ratio = debt_ratio
 
     # 利润含金量
     cash_to_profit = oper_cash / abs(net_profit) * 100 if net_profit != 0 else 0
@@ -411,7 +401,6 @@ def analyze_financial_quality() -> dict:
         "score": total_score,
         "max_score": 20,
         "roe": roe,
-        "latest_debt_ratio": latest_debt_ratio,
         "annual_debt_ratio": debt_ratio,
         "eps": eps,
         "cash_to_profit_ratio": round(cash_to_profit, 1),
@@ -426,7 +415,7 @@ def analyze_financial_quality() -> dict:
         "audit_type": audit_type,
         "scoring": {
             "roe": {"score": roe_score, "max": 8, "reason": f"ROE={roe:.2f}%"},
-            "debt": {"score": debt_score, "max": 6, "reason": f"资产负债率={debt_ratio:.2f}%（最新{latest_debt_ratio:.1f}%）"},
+            "debt": {"score": debt_score, "max": 6, "reason": f"资产负债率={debt_ratio:.2f}%"},
             "cash": {"score": cash_score, "max": 6, "reason": f"现金流/净利润={cash_to_profit:.1f}%"},
             "quality_deduction": {"score": -quality_deduction, "max": 0, "reason": f"预警={warn_sign}, 审计={audit_type}"},
         }
@@ -470,8 +459,9 @@ def analyze_governance() -> dict:
     if pledge:
         for p in pledge:
             pname = p.get("PLE_HLD_NAME", "")
-            pvol = safe_float(p.get("PLE_VOL"))
-            if pname and pvol > 0:
+            chan_type = str(p.get("TYPE_SELE_PAR", ""))
+            pvol = safe_float(p.get("PLE_SHARE"))
+            if pname and pvol > 0 and "解除" not in chan_type:
                 pledge_names.add(pname)
                 pledge_details.append({
                     "name": pname,
@@ -496,11 +486,11 @@ def analyze_governance() -> dict:
     all_changes = dir_changes + man_changes
     recent_changes = []
     for c in all_changes:
-        chan_type = str(c.get("CHAN_REAS_PAR", ""))
-        chan_vol = safe_float(c.get("CHAN_VOL"))
+        chan_type = str(c.get("CHAN_REAS_DES", ""))
+        chan_vol = safe_float(c.get("CHAN_HOLD_VOL"))
         if chan_vol != 0:
             recent_changes.append({
-                "name": c.get("INDIV_NAME", ""),
+                "name": c.get("LEAD_NAME", ""),
                 "position": c.get("POSI_NAME", ""),
                 "change_type": chan_type,
                 "volume": round(chan_vol),
@@ -510,7 +500,7 @@ def analyze_governance() -> dict:
     recent_changes = recent_changes[:10]
 
     # 判断是否有减持
-    has_reduction = any(c["volume"] < 0 for c in recent_changes[:5])
+    has_reduction = any(c["volume"] < 0 for c in recent_changes)
 
     # 分红情况
     div_years = []
@@ -523,7 +513,8 @@ def analyze_governance() -> dict:
     if div_impl:
         div_impl.sort(key=lambda x: str(x.get("END_DATE", "")), reverse=True)
         latest_div = div_impl[0]
-    div_rmb = safe_float(latest_div.get("DIV_RMB"))
+    div_rmb = (safe_float(latest_div.get("DIV_RMB")) / 10) or (safe_float(latest_div.get("DIV_TAX_RMB")) / 10)
+    div_cont = latest_div.get("DIV_CONT", "") or ""
 
     has_incentive = len(incentive) > 0
 
@@ -586,27 +577,15 @@ def analyze_governance() -> dict:
         "control_ratio": control_ratio,
         "top10_shareholders": [
             {"rank": r.get("HOLD_RANK"), "name": r.get("HLD_NAME", ""), "ratio": safe_float(r.get("HOLD_RATIO"))}
-            for r in latest_top10[:5]
+            for r in latest_top10[:10]
         ],
         "pledge_count": pledge_count,
-        "pledge_details": pledge_details[:5],
-        "top10_pledge": top10_pledge_info,
         "dividend_years": div_years,
         "dividend_count": div_count,
         "latest_dividend_per_share": div_rmb,
+        "latest_dividend_plan": div_cont,
         "has_equity_incentive": has_incentive,
-        "audit_firms": list(audit_firms),
-        "insider_trading": recent_changes,
         "has_insider_reduction": has_reduction,
-        "list_date": list_date,
-        "is_new_stock": is_new_stock,
-        "scoring": {
-            "control_structure": {"score": ctrl_score, "max": 3, "reason": f"实控人持股{control_ratio:.1f}%"},
-            "dividend": div_scoring,
-            "pledge_risk": {"score": pledge_score, "max": 1, "reason": f"质押记录{pledge_count}条，十大股东质押{len(top10_pledge_info)}人"},
-            "governance_bonus": {"score": gov_bonus, "max": 1, "reason": f"股权激励={'有' if has_incentive else '无'}"},
-            "audit_continuity": {"score": audit_score, "max": 2, "reason": f"审计机构{len(audit_firms)}家"},
-        }
     }
 
 
@@ -663,8 +642,8 @@ def analyze_risks() -> dict:
         elif "预警" in warn:
             deductions.append({"item": "盈利质量需关注", "deduction": 1, "detail": warn})
 
-    # 4. 资产负债率过高（用最新报告期）
-    latest_debt = safe_float(latest_all.get("DEBT_RATIO")) if latest_all else safe_float(latest.get("DEBT_RATIO"))
+    # 4. 资产负债率过高（统一用年报）
+    latest_debt = safe_float(latest.get("DEBT_RATIO"))
     if latest_debt > 80:
         deductions.append({"item": "资产负债率过高", "deduction": 3, "detail": f"资产负债率{latest_debt:.1f}%"})
     elif latest_debt > 70:
