@@ -125,6 +125,32 @@ cxdata-Company-Quality-Assessor-agent/
 
 ## 变更历史
 
+### 2026-07-02 修复多处 API 字段名错误与数据逻辑问题
+
+对照 API references 文档逐字段核查，修复因字段名写错、单位理解错误、硬编码等导致的数据错误：
+
+**字段名错误（对照 API 文档修正）：**
+- 质押：`PLE_VOL`（十大股东接口字段）→ `PLE_SHARE`（质押接口字段），并排除"解除质押"记录
+- 分红：`DIV_RMB`/`DIV_TAX_RMB` 是"每10股"金额，未除以10导致每股分红虚高10倍
+- 董监高变动：`INDIV_NAME`→`LEAD_NAME`、`CHAN_VOL`→`CHAN_HOLD_VOL`、`CHAN_REAS_PAR`→`CHAN_REAS_DES`
+
+**数据截断问题：**
+- 前十大股东 `[:5]`→`[:10]`（只显示了5个）
+- 收入结构 `by_industry[:5]`/`by_region[:3]`→去掉截断（数据不完整）
+- 高管减持判断 `recent_changes[:5]`→遍历全部（可能漏判减持）
+
+**硬编码/逻辑问题：**
+- 主营构成 `endDate: "2024-12-31"`→动态取最新年报日期
+- 财务质量/风险扣分中"最新资产负债率"混用季报→统一用年报，删除冗余字段
+- 报告"主营业务"行内容超长导致表格列宽问题→移出表格单独显示
+
+**新增：**
+- 新增"最新分红方案"字段（如"10转增4.5股派3.8元(含税)"）
+- AGENT.md 添加编码前置规则：修改 API 相关代码前必须先读 references 文档
+
+**清理：**
+- 删除报告未使用的输出字段：scoring、pledge_details、top10_pledge、insider_trading、audit_firms、is_new_stock、list_date、business_scope、revenue_by_product、core_products
+
 ### 2026-06-29 硬编码凭证：cred_crypto 密钥派生退化检测（同步主线）
 
 cred_crypto.py 与主线同源（差异 0），`_derive_key()` 在 host/user 全空（容器环境）时退化成固定弱密钥。同步主线修复：host/user 均空时拒绝生成密钥。三 agent 同步。
