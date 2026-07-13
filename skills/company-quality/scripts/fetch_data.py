@@ -252,9 +252,9 @@ def main():
 
     # 公司简介
     if company_name:
-        profile = fetch_all_pages("getPubComInfoByCond-G",
-                                  {"comChiName": company_name})
-        save("company_profile.json", profile)
+        profile = call_api("getPubComInfoByCond-G",
+                           {"comChiName": company_name, "pageNum": "1", "pageSize": "1"})
+        save("company_profile.json", profile.get("result", []))
     else:
         save("company_profile.json", [])
 
@@ -285,43 +285,43 @@ def main():
                                 {"stkCode": stk_code})
     save("main_accounting_data.json", main_acct)
 
-    # 审计意见
-    audit = fetch_all_pages("getDComAuditOpinNewByCond-G",
-                            {"stkCode": stk_code})
-    save("audit_opinion.json", audit)
-
-    # ===== 步骤3: 财务指标（盈利质量预警） =====
-    print("\n[3/9] 财务指标...")
-
-    data = fetch_all_pages("getDComProfMakeQatByCond-G",
-                           {"stkCode": stk_code, "sheetMarkPar": "1"})
-    save("indicator_profit_quality.json", data)
-
-    # ===== 步骤4: 主营构成 + 财务附注（商业模式/财务质量/风险扣分） =====
-    print("\n[4/9] 主营构成与附注...")
-
-    latest_end_date = main_acct[0].get("END_DATE", "") if main_acct else ""
+    # 提前计算最新年报日期（步骤3/4/5共用）
     latest_annual_date = ""
     for r in main_acct:
         d = str(r.get("END_DATE", ""))
         if d.endswith("-12-31"):
             latest_annual_date = d
             break
+    latest_end_date = main_acct[0].get("END_DATE", "") if main_acct else ""
+
+    # 审计意见
+    audit = call_api("getDComAuditOpinNewByCond-G",
+                     {"stkCode": stk_code, "pageNum": "1", "pageSize": "10"})
+    save("audit_opinion.json", audit.get("result", []))
+
+    # ===== 步骤3: 财务指标（盈利质量预警） =====
+    print("\n[3/9] 财务指标...")
+
+    pq_params = {"stkCode": stk_code, "sheetMarkPar": "1", "pageNum": "1", "pageSize": "20"}
+    data = call_api("getDComProfMakeQatByCond-G", pq_params)
+    save("indicator_profit_quality.json", data.get("result", []))
+
+    # ===== 步骤4: 主营构成 + 财务附注（商业模式/财务质量/风险扣分） =====
+    print("\n[4/9] 主营构成与附注...")
+
     mb_params = {"stkCode": stk_code, "sheetMarkPar": "1"}
     if latest_annual_date:
         mb_params["endDate"] = latest_annual_date
-    mb_data = fetch_all_pages("getComFinNoteMainBusiByCond-G",
-                              mb_params)
-    save("main_business_breakdown.json", mb_data)
+    mb_data = call_api("getComFinNoteMainBusiByCond-G", mb_params)
+    save("main_business_breakdown.json", mb_data.get("result", []))
 
     # 资产负债表附注（应收账款等），只拉最新一期
     latest_end_date = main_acct[0].get("END_DATE", "") if main_acct else ""
     bal_params = {"stkCode": stk_code}
     if latest_end_date:
         bal_params["endDate"] = latest_end_date
-    bal_notes = fetch_all_pages("getComFinNoteBalaTacbbByCond-G",
-                                bal_params)
-    save("balance_sheet_notes.json", bal_notes)
+    bal_notes = call_api("getComFinNoteBalaTacbbByCond-G", bal_params)
+    save("balance_sheet_notes.json", bal_notes.get("result", []))
 
     # 非经常性损益，只需最近几年年报（一页60条足够）
     nr_data = call_api("getComFinNoteProfAndLossByCond-G",
@@ -356,9 +356,9 @@ def main():
     print("\n[6/9] 股东与股权...")
 
     # 实控人
-    controller = fetch_all_pages("getDComHldActuContlrByCond-G",
-                                 {"stkCode": stk_code})
-    save("actual_controller.json", controller)
+    controller = call_api("getDComHldActuContlrByCond-G",
+                          {"stkCode": stk_code, "pageNum": "1", "pageSize": "10"})
+    save("actual_controller.json", controller.get("result", []))
 
     # 十大股东，只需最新一期（一页足够）
     top10 = call_api("getDComTenHldByCond-G",
@@ -368,30 +368,30 @@ def main():
     # ===== 步骤7: 分红与激励（治理章节） =====
     print("\n[7/9] 分红与激励...")
 
-    dividend_plan = fetch_all_pages("getDComDivPlanByCond-G",
-                                    {"stkCode": stk_code})
-    save("dividend_plan.json", dividend_plan)
+    dividend_plan = call_api("getDComDivPlanByCond-G",
+                             {"stkCode": stk_code, "pageNum": "1", "pageSize": "20"})
+    save("dividend_plan.json", dividend_plan.get("result", []))
 
-    dividend_impl = fetch_all_pages("getDComDivImplByCond-G",
-                                    {"stkCode": stk_code})
-    save("dividend_implementation.json", dividend_impl)
+    dividend_impl = call_api("getDComDivImplByCond-G",
+                             {"stkCode": stk_code, "pageNum": "1", "pageSize": "20"})
+    save("dividend_implementation.json", dividend_impl.get("result", []))
 
-    incentive = fetch_all_pages("getDComInceMainByCond-G",
-                                {"stkCode": stk_code})
-    save("equity_incentive.json", incentive)
+    incentive = call_api("getDComInceMainByCond-G",
+                         {"stkCode": stk_code, "pageNum": "1", "pageSize": "20"})
+    save("equity_incentive.json", incentive.get("result", []))
 
     # ===== 步骤8: 公司治理（治理章节） =====
     print("\n[8/9] 公司治理...")
 
     # 董事增减持
-    dir_changes = fetch_all_pages("getDComDirHoldstkChanByCond-G",
-                                  {"stkCode": stk_code})
-    save("director_share_changes.json", dir_changes)
+    dir_changes = call_api("getDComDirHoldstkChanByCond-G",
+                           {"stkCode": stk_code, "pageNum": "1", "pageSize": "20"})
+    save("director_share_changes.json", dir_changes.get("result", []))
 
     # 高管增减持
-    man_changes = fetch_all_pages("getDManHoldstkChanByCond-G",
-                                  {"stkCode": stk_code})
-    save("management_share_changes.json", man_changes)
+    man_changes = call_api("getDManHoldstkChanByCond-G",
+                           {"stkCode": stk_code, "pageNum": "1", "pageSize": "20"})
+    save("management_share_changes.json", man_changes.get("result", []))
 
     # ===== 步骤9: 风险扣分数据 =====
     print("\n[9/9] 风险扣分...")
