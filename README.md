@@ -125,6 +125,18 @@ cxdata-Company-Quality-Assessor-agent/
 
 ## 变更历史
 
+### 2026-07-13 行业排名口径统一 + 接口积分优化
+
+**行业排名口径统一：**
+- `analyze_competitive_position()` 优先按公司所属行业名（`sw_industry`）匹配排名记录，不再取 END_DATE 最大的（碰巧取到一级"电子"506家公司），修正为三级"半导体设备"25家公司
+- 报告标签从"行业 ROE（加权平均）"改为"行业 ROE（加权平均·{行业名}）"，明确数据来源行业级别
+
+**接口积分优化（33次/1290积分 → 约15-18次/420-540积分，降幅约60%）：**
+- 剔除冗余接口：移除 `getStkInduFinIndexByCond-G`（industry_average.json），该数据加载后从未被使用，省 4 次/200 积分
+- 行业衍生指标精简取数：`getStkFinDeriIndexInduByCond-G` 从 `fetch_all_pages`（拉全量 230 条 / 12 次/600 积分）改为 `call_api` + `endDate` 筛选最新年报（1 次/50 积分）
+- 全面 `fetch_all_pages` → `call_api`：审计意见、公司简介、实控人、分红预案/实施、股权激励、董事/高管增减持、主营构成、资产负债表附注、盈利质量指标等接口，从 `fetch_all_pages`（会翻页检查多调用）改为 `call_api`（单页精确取数），避免不必要的翻页请求
+- `latest_annual_date` 计算提前至步骤2末尾，供步骤3/4/5共用
+
 ### 2026-07-13 行业 ROE 口径修正 + 质押指标剔除 + 报告锚点优化
 
 **行业 ROE 口径修正（与产品端对齐）：**
