@@ -336,11 +336,7 @@ def main():
                              {"stkCode": stk_code, "pageNum": "1", "pageSize": "40"})
         save("industry_ranking.json", rank_data.get("result", []))
 
-        avg_data = fetch_all_pages("getStkInduFinIndexByCond-G",
-                                   {"induClassName": sw_industry})
-        save("industry_average.json", avg_data)
-
-        # 行业衍生指标(加权ROE等)，用申万二级行业
+        # 行业衍生指标(加权ROE等)，用申万二级行业，只拉最新年报
         sw_industry_l2 = ""
         rank_results = rank_data.get("result", [])
         l2_records = [r for r in rank_results if str(r.get("INDU_LEVEL")) == "2"]
@@ -348,13 +344,12 @@ def main():
             sw_industry_l2 = l2_records[0].get("INDU_NAME", "")
         if not sw_industry_l2:
             sw_industry_l2 = sw_industry
-        indu_derivi_params = {"induClassName": sw_industry_l2, "pageNum": "1", "pageSize": "20"}
-        indu_derivi = fetch_all_pages("getStkFinDeriIndexInduByCond-G", indu_derivi_params)
-        save("industry_derivative.json", indu_derivi)
+        indu_derivi = call_api("getStkFinDeriIndexInduByCond-G",
+                               {"induClassName": sw_industry_l2, "endDate": latest_annual_date, "pageNum": "1", "pageSize": "20"})
+        save("industry_derivative.json", indu_derivi.get("result", []))
     else:
         print("  [WARN] 未获取到申万行业名，跳过行业排名")
         save("industry_ranking.json", [])
-        save("industry_average.json", [])
         save("industry_derivative.json", [])
 
     # ===== 步骤6: 股东与股权（治理章节） =====

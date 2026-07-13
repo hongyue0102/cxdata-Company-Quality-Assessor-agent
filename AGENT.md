@@ -236,3 +236,21 @@ steps:
   7. 运行 generate_report.py 输出数值固定骨架
   8. Agent LLM 在「**AI 解读：**」槽位填文字，整合完整报告
   9. 保存报告并给用户总结
+
+## 变更履历
+
+### v1.2.0 (2026-07-13)
+- **行业排名口径统一**：`analyze_competitive_position()` 优先按公司所属行业名（`sw_industry`）匹配排名记录，不再取 END_DATE 最大的（碰巧取到一级"电子"）
+- **行业 ROE 口径标注**：报告标签从"行业 ROE（加权平均）"改为"行业 ROE（加权平均·{行业名}）"，明确数据来源行业级别
+- **剔除冗余接口**：移除 `getStkInduFinIndexByCond-G`（industry_average.json），该数据加载后从未被使用，省 4 次调用 / 200 积分
+- **行业衍生指标精简取数**：`getStkFinDeriIndexInduByCond-G` 从 `fetch_all_pages`（拉全量 230 条 / 12 次调用 / 600 积分）改为 `call_api` + `endDate` 筛选最新年报（1 次调用 / 50 积分）
+- **积分消耗优化**：单次评估从 33 次 / 1290 积分降至 18 次 / 540 积分，降幅 58%
+
+### v1.1.0 (2026-07-13)
+- 行业 ROE 口径从 `INDU_ROE`（汇总）切换为 `ROE_WEI`（加权平均），申万二级
+- 新增 `industry_derivative.json` 取数步骤
+- 剔除质押指标（数据源无法区分质押/解押）
+- 修复"合计"行重复计算 bug
+- AI 解读约束从报告正文移至 AGENT.md 禁止事项
+- 段落标题追加公司简称+代码锚点
+- 标签修正："最大业务占比"→"最大业务收入占比"，"行业平均ROE"→"行业ROE（加权平均）"

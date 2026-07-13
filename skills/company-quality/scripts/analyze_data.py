@@ -96,10 +96,13 @@ def analyze_business_model() -> dict:
         if ed == latest_date:
             latest_items.append(r)
 
-    # 按行业/产品/地区分类
-    by_industry = [r for r in latest_items if r.get("PROJ_CLASS") == "按行业"]
-    by_product = [r for r in latest_items if r.get("PROJ_CLASS") == "按产品"]
-    by_region = [r for r in latest_items if r.get("PROJ_CLASS") == "按地区"]
+    # 按行业/产品/地区分类（排除"合计"行，避免重复计算）
+    by_industry = [r for r in latest_items if r.get("PROJ_CLASS") == "按行业" and r.get("PRO_NAME_NEW") != "合计"]
+    by_product = [r for r in latest_items if r.get("PROJ_CLASS") == "按产品" and r.get("PRO_NAME_NEW") != "合计"]
+    by_region = [r for r in latest_items if r.get("PROJ_CLASS") == "按地区" and r.get("PRO_NAME_NEW") != "合计"]
+    # 展示用列表（含合计行）
+    by_industry_with_total = [r for r in latest_items if r.get("PROJ_CLASS") == "按行业"]
+    by_region_with_total = [r for r in latest_items if r.get("PROJ_CLASS") == "按地区"]
 
     total_revenue = sum(safe_float(r.get("MAIN_BUSI_INCO")) for r in by_industry)
     top1_revenue = safe_float(by_industry[0].get("MAIN_BUSI_INCO")) if by_industry else 0
@@ -147,11 +150,11 @@ def analyze_business_model() -> dict:
         "revenue_by_industry": [
             {"name": r.get("PRO_NAME_NEW", ""), "revenue_yi": round(safe_float(r.get("MAIN_BUSI_INCO")) / 1e8, 2),
              "margin": round(safe_float(r.get("GROSS_MARG")) * 100, 2)}
-            for r in by_industry
+            for r in by_industry_with_total
         ],
         "revenue_by_region": [
             {"name": r.get("PRO_NAME_NEW", ""), "revenue_yi": round(safe_float(r.get("MAIN_BUSI_INCO")) / 1e8, 2)}
-            for r in by_region
+            for r in by_region_with_total
         ],
     }
 
@@ -162,7 +165,6 @@ def analyze_business_model() -> dict:
 def analyze_competitive_position() -> dict:
     """分析行业排名、竞争优势。"""
     ranking = load("industry_ranking.json")
-    industry_avg = load("industry_average.json")
     main_data = load("main_accounting_data.json")
 
     meta = load_meta()
@@ -174,25 +176,42 @@ def analyze_competitive_position() -> dict:
     # 最新报告期数据（用于展示当前实力）
     latest_all = get_latest_period(main_data, prefer_annual=False)
 
-    # 最新年报行业排名
+    # 最新年报行业排名（优先用与公司所属行业同级别的记录）
     latest_rank = {}
     if ranking:
         annual_ranks = [r for r in ranking if "12-31" in str(r.get("END_DATE", ""))]
         if annual_ranks:
-            latest_rank = max(annual_ranks, key=lambda x: str(x.get("END_DATE", "")))
+            latest_date = max(str(r.get("END_DATE", "")) for r in annual_ranks)
+            same_period = [r for r in annual_ranks if str(r.get("END_DATE", "")) == latest_date]
+            # 优先匹配公司所属行业名
+            matched = [r for r in same_period if r.get("INDU_NAME") == sw_industry]
+            if matched:
+                latest_rank = matched[0]
+            else:
+                latest_rank = max(same_period, key=lambda x: str(x.get("END_DATE", "")))
 
     # ROE 排名
     roe_rank = safe_int(latest_rank.get("L01_RET_ON_EQU_RANK"))
     total_companies = safe_int(latest_rank.get("COM_NUM"))
     rev_rank = safe_int(latest_rank.get("L03_OPER_INC_RANK"))
 
-    # 行业 ROE 均值（加权口径，与产品端一致）
+    # 行业 ROE 均值（加权口径，与产品端一致，匹配公司所属行业）
     ind_roe = 0
+    ind_roe_industry = ""
     industry_derivative = load("industry_derivative.json")
     if industry_derivative:
         annual_deriv = [r for r in industry_derivative if "12-31" in str(r.get("END_DATE", ""))]
         if annual_deriv:
-            ind_roe = safe_float(max(annual_deriv, key=lambda x: str(x.get("END_DATE", ""))).get("ROE_WEI"))
+            latest_deriv_date = max(str(r.get("END_DATE", "")) for r in annual_deriv)
+            same_period_deriv = [r for r in annual_deriv if str(r.get("END_DATE", "")) == latest_deriv_date]
+            # 优先匹配公司所属行业名
+            matched_deriv = [r for r in same_period_deriv if r.get("INDU_CLASS_NAME") == sw_industry]
+            if matched_deriv:
+                best_deriv = matched_deriv[0]
+            else:
+                best_deriv = max(same_period_deriv, key=lambda x: str(x.get("END_DATE", "")))
+            ind_roe = safe_float(best_deriv.get("ROE_WEI"))
+            ind_roe_industry = best_deriv.get("INDU_CLASS_NAME", "")
 
     # 年报 ROE（用于排名对比）
     annual_roe = safe_float(latest_annual.get("ROE_WEIGH")) if latest_annual else 0
@@ -222,6 +241,7 @@ def analyze_competitive_position() -> dict:
         "revenue_rank": rev_rank,
         "revenue_percentile": round(rev_pct, 1),
         "industry_avg_roe": ind_roe,
+        "industry_avg_roe_name": ind_roe_industry,
         "total_companies_in_industry": total_companies,
         "above_industry_avg": above_ind,
         "scoring": {
