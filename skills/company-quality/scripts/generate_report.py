@@ -141,6 +141,29 @@ def _load_data(stk_code=None):
 
 # ========== 8 段骨架生成 ==========
 
+def _anchor(a):
+    """从 meta 动态生成 '公司简称（代码）' 锚点字符串，用于段落标题和 AI 约束。"""
+    meta = a.get("_meta", {})
+    company_info = {}
+    ci_path = DATA_DIR / "company_info.json"
+    if ci_path.exists():
+        try:
+            with open(ci_path, encoding="utf-8") as f:
+                ci_list = json.load(f)
+            if ci_list:
+                company_info = ci_list[0]
+        except Exception:
+            pass
+    short_name = company_info.get("STK_SHORT_NAME") or company_info.get("COM_CHI_SHORT_NAME") or ""
+    stk_code = meta.get("stk_code", "") or ""
+    if short_name and stk_code:
+        return f"{short_name}（{stk_code}）"
+    name = meta.get("company_name", "") or ""
+    if name and stk_code:
+        return f"{name}（{stk_code}）"
+    return stk_code or name or ""
+
+
 def _build_header(a, lines):
     """报告标题与基本信息行。"""
     meta = a.get("_meta", {})
@@ -151,6 +174,8 @@ def _build_header(a, lines):
     lines.append(f"# 【公司质地评估报告】{_md(company_name)}（{_md(stk_code)}）")
     lines.append("")
     lines.append(f"> 数据获取时间：{fetch_time} | 数据来源：财新数据（cxdata） | 基于公开财务数据推演，不构成任何投资建议")
+    lines.append("")
+    anchor = _anchor(a)
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -167,7 +192,7 @@ def _build_section1_score(a, lines):
     total_deduction = risk.get("total_deduction")
     max_deduction = risk.get("max_deduction")
 
-    lines.append("## 【1. 公司质地总评分】")
+    lines.append(f"## 【1. 公司质地总评分】—— {_md(_anchor(a))}")
     lines.append("")
     lines.append("| 项目 | 数据 |")
     lines.append("|------|------|")
@@ -194,7 +219,7 @@ def _build_section2_business(a, lines):
     avg_gross_margin = bm.get("avg_gross_margin")
     main_business = (bm.get("main_business") or "").strip()
 
-    lines.append("## 【2. 商业模式与壁垒】")
+    lines.append(f"## 【2. 商业模式与壁垒】—— {_md(_anchor(a))}")
     lines.append("")
     lines.append(f"**得分：{_fmt_score(score, max_score)}**")
     lines.append("")
@@ -262,7 +287,7 @@ def _build_section3_competitive(a, lines):
     revenue_percentile = cp.get("revenue_percentile")
     above_avg = cp.get("above_industry_avg")
 
-    lines.append("## 【3. 行业地位与竞争优势】")
+    lines.append(f"## 【3. 行业地位与竞争优势】—— {_md(_anchor(a))}")
     lines.append("")
     lines.append(f"**得分：{_fmt_score(score, max_score)}**")
     lines.append("")
@@ -272,7 +297,7 @@ def _build_section3_competitive(a, lines):
     lines.append(f"| 行业内公司总数 | {_fmt_num(total_companies, 0) if total_companies is not None else 'N/A'} 家 |")
     lines.append(f"| 年度 ROE | {_fmt_pct(annual_roe)} |")
     lines.append(f"| 最新报告期 ROE | {_fmt_pct(latest_roe)} |")
-    lines.append(f"| 行业平均 ROE | {_fmt_pct(industry_avg_roe)} |")
+    lines.append(f"| 行业 ROE（加权平均） | {_fmt_pct(industry_avg_roe)} |")
     lines.append(f"| ROE 是否超行业均值 | {_fmt_bool(above_avg)} |")
     lines.append(f"| ROE 行业排名 | 第 {_fmt_num(roe_rank, 0) if roe_rank is not None else 'N/A'} 名 |")
     lines.append(f"| ROE 行业分位 | {_fmt_pct(roe_percentile)} |")
@@ -291,7 +316,7 @@ def _build_section4_growth(a, lines):
     score = gq.get("score")
     max_score = gq.get("max_score")
 
-    lines.append("## 【4. 成长质量】")
+    lines.append(f"## 【4. 成长质量】—— {_md(_anchor(a))}")
     lines.append("")
     lines.append(f"**得分：{_fmt_score(score, max_score)}**")
     lines.append("")
@@ -370,7 +395,7 @@ def _build_section5_financial(a, lines):
     score = fq.get("score")
     max_score = fq.get("max_score")
 
-    lines.append("## 【5. 财务质量】")
+    lines.append(f"## 【5. 财务质量】—— {_md(_anchor(a))}")
     lines.append("")
     lines.append(f"**得分：{_fmt_score(score, max_score)}**")
     lines.append("")
@@ -401,7 +426,7 @@ def _build_section6_governance(a, lines):
     score = gv.get("score")
     max_score = gv.get("max_score")
 
-    lines.append("## 【6. 治理与资本配置】")
+    lines.append(f"## 【6. 治理与资本配置】—— {_md(_anchor(a))}")
     lines.append("")
     lines.append(f"**得分：{_fmt_score(score, max_score)}**")
     lines.append("")
@@ -411,7 +436,6 @@ def _build_section6_governance(a, lines):
     lines.append("|------|------|")
     lines.append(f"| 实际控制人 | {_md(gv.get('actual_controller', 'N/A') or 'N/A')} |")
     lines.append(f"| 实控人持股比例 | {_fmt_pct(gv.get('control_ratio'))} |")
-    lines.append(f"| 质押记录数 | {_fmt_num(gv.get('pledge_count'), 0) if gv.get('pledge_count') is not None else 'N/A'} 条 |")
     lines.append(f"| 历史分红次数 | {_fmt_num(gv.get('dividend_count'), 0) if gv.get('dividend_count') is not None else 'N/A'} 次 |")
     lines.append(f"| 最新每股分红（元） | {_fmt_num(gv.get('latest_dividend_per_share'))} |")
     div_plan = gv.get("latest_dividend_plan", "")
@@ -454,7 +478,7 @@ def _build_section7_risk(a, lines):
     max_deduction = risk.get("max_deduction")
     risk_items = risk.get("risk_items", []) or []
 
-    lines.append("## 【7. 主要扣分项】")
+    lines.append(f"## 【7. 主要扣分项】—— {_md(_anchor(a))}")
     lines.append("")
     lines.append(f"**风险扣分：{_fmt_score(total_deduction, max_deduction)}**")
     lines.append("")
@@ -481,7 +505,7 @@ def _build_section8_conclusion(a, lines):
     max_score = a.get("max_score")
     grade = a.get("grade", "N/A")
 
-    lines.append("## 【8. 结论】")
+    lines.append(f"## 【8. 结论】—— {_md(_anchor(a))}")
     lines.append("")
     lines.append(f"**综合评分：{_fmt_score(final_score, max_score)}（{grade}）**")
     lines.append("")

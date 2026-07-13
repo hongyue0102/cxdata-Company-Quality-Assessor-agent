@@ -186,12 +186,13 @@ def analyze_competitive_position() -> dict:
     total_companies = safe_int(latest_rank.get("COM_NUM"))
     rev_rank = safe_int(latest_rank.get("L03_OPER_INC_RANK"))
 
-    # 行业 ROE 均值
+    # 行业 ROE 均值（加权口径，与产品端一致）
     ind_roe = 0
-    if industry_avg:
-        annual_avg = [r for r in industry_avg if "12-31" in str(r.get("END_DATE", ""))]
-        if annual_avg:
-            ind_roe = safe_float(max(annual_avg, key=lambda x: str(x.get("END_DATE", ""))).get("INDU_ROE"))
+    industry_derivative = load("industry_derivative.json")
+    if industry_derivative:
+        annual_deriv = [r for r in industry_derivative if "12-31" in str(r.get("END_DATE", ""))]
+        if annual_deriv:
+            ind_roe = safe_float(max(annual_deriv, key=lambda x: str(x.get("END_DATE", ""))).get("ROE_WEI"))
 
     # 年报 ROE（用于排名对比）
     annual_roe = safe_float(latest_annual.get("ROE_WEIGH")) if latest_annual else 0
@@ -426,10 +427,9 @@ def analyze_financial_quality() -> dict:
 # 模块5：治理与资本配置（满分10分）
 # ========================================
 def analyze_governance() -> dict:
-    """分析管理层、股权结构、分红、质押。"""
+    """分析管理层、股权结构、分红。"""
     controller = load("actual_controller.json")
     shareholders = load("top10_shareholders.json")
-    pledge = load("share_pledge.json")
     div_plan = load("dividend_plan.json")
     div_impl = load("dividend_implementation.json")
     incentive = load("equity_incentive.json")
@@ -452,35 +452,6 @@ def analyze_governance() -> dict:
         shareholders.sort(key=lambda x: str(x.get("END_DATE", "")), reverse=True)
         latest_date = str(shareholders[0].get("END_DATE", ""))
         latest_top10 = [r for r in shareholders if str(r.get("END_DATE", "")) == latest_date and r.get("HOLD_RANK")]
-
-    # 【新增】质押与十大股东交叉检查
-    pledge_details = []
-    pledge_names = set()
-    if pledge:
-        for p in pledge:
-            pname = p.get("PLE_HLD_NAME", "")
-            chan_type = str(p.get("TYPE_SELE_PAR", ""))
-            pvol = safe_float(p.get("PLE_SHARE"))
-            if pname and pvol > 0 and "解除" not in chan_type:
-                pledge_names.add(pname)
-                pledge_details.append({
-                    "name": pname,
-                    "pledge_shares": round(pvol / 1e4, 0),
-                    "start_date": str(p.get("START_DATE", ""))[:10],
-                })
-
-    # 十大股东中的质押情况
-    top10_pledge_info = []
-    for s in latest_top10:
-        sname = s.get("HLD_NAME", "")
-        if sname in pledge_names:
-            top10_pledge_info.append({
-                "name": sname,
-                "hold_ratio": safe_float(s.get("HOLD_RATIO")),
-                "is_pledged": True,
-            })
-
-    pledge_count = len(pledge_details)
 
     # 【新增】高管增减持分析
     all_changes = dir_changes + man_changes
@@ -532,14 +503,8 @@ def analyze_governance() -> dict:
 
     div_score = score_band(div_count, [(4, 3), (2, 2), (1, 1), (0, 0)])
 
-    # 质押评分：考虑十大股东质押
-    if pledge_count == 0 or not top10_pledge_info:
-        pledge_score = 1
-    else:
-        pledge_score = 0
-
     gov_bonus = 1 if has_incentive else 0
-    audit_score = 2 if len(audit_firms) <= 2 and len(audit) > 0 else 1
+    audit_score = 3 if len(audit_firms) <= 2 and len(audit) > 0 else 1
 
     # 次新股判定：上市不足1年，分红项豁免（新股尚处成长期，未分红属正常，不应扣分）
     list_date_raw = ""
@@ -567,7 +532,7 @@ def analyze_governance() -> dict:
     else:
         div_scoring = {"score": div_score, "max": 3, "reason": f"近5年分红{div_count}次"}
 
-    total_score = ctrl_score + div_score + pledge_score + gov_bonus + audit_score
+    total_score = ctrl_score + div_score + gov_bonus + audit_score
     max_score = 10
 
     return {
@@ -579,7 +544,6 @@ def analyze_governance() -> dict:
             {"rank": r.get("HOLD_RANK"), "name": r.get("HLD_NAME", ""), "ratio": safe_float(r.get("HOLD_RATIO"))}
             for r in latest_top10[:10]
         ],
-        "pledge_count": pledge_count,
         "dividend_years": div_years,
         "dividend_count": div_count,
         "latest_dividend_per_share": div_rmb,

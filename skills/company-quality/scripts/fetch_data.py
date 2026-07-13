@@ -58,6 +58,7 @@ _ALLOWED_APIS = frozenset([
     "getDComDirHoldstkChanByCond-G",    # 董事增减持
     "getDManHoldstkChanByCond-G",       # 高管增减持
     "getDComRelaTradeByCond-G",         # 关联交易
+    "getStkFinDeriIndexInduByCond-G",  # 行业衍生指标(加权ROE等)
 ])
 
 
@@ -338,10 +339,23 @@ def main():
         avg_data = fetch_all_pages("getStkInduFinIndexByCond-G",
                                    {"induClassName": sw_industry})
         save("industry_average.json", avg_data)
+
+        # 行业衍生指标(加权ROE等)，用申万二级行业
+        sw_industry_l2 = ""
+        rank_results = rank_data.get("result", [])
+        l2_records = [r for r in rank_results if str(r.get("INDU_LEVEL")) == "2"]
+        if l2_records:
+            sw_industry_l2 = l2_records[0].get("INDU_NAME", "")
+        if not sw_industry_l2:
+            sw_industry_l2 = sw_industry
+        indu_derivi_params = {"induClassName": sw_industry_l2, "pageNum": "1", "pageSize": "20"}
+        indu_derivi = fetch_all_pages("getStkFinDeriIndexInduByCond-G", indu_derivi_params)
+        save("industry_derivative.json", indu_derivi)
     else:
         print("  [WARN] 未获取到申万行业名，跳过行业排名")
         save("industry_ranking.json", [])
         save("industry_average.json", [])
+        save("industry_derivative.json", [])
 
     # ===== 步骤6: 股东与股权（治理章节） =====
     print("\n[6/9] 股东与股权...")
@@ -355,11 +369,6 @@ def main():
     top10 = call_api("getDComTenHldByCond-G",
                      {"stkCode": stk_code, "pageNum": "1", "pageSize": "20"})
     save("top10_shareholders.json", top10.get("result", []))
-
-    # 股权质押
-    pledge = fetch_all_pages("getDComSharePleByCond-G",
-                             {"stkCode": stk_code})
-    save("share_pledge.json", pledge)
 
     # ===== 步骤7: 分红与激励（治理章节） =====
     print("\n[7/9] 分红与激励...")
