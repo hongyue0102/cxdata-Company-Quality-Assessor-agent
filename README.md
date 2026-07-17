@@ -125,6 +125,21 @@ cxdata-Company-Quality-Assessor-agent/
 
 ## 变更历史
 
+### 2026-07-17 火山终版安全加固（对齐 stock agent 审计通过版本）
+
+参照火山客户提供的 stock-analysis-agent 终版安全加固，完整同步所有安全修复。4 个核心共享脚本从已通过审计的 stock agent 直接复制，query.py 和 requirements.txt 同步修改。
+
+| 修改项 | 说明 |
+|--------|------|
+| auth.py | 审计日志系统 + terms_decline 确认机制 + 手机号短号码保护 |
+| common.py | authtoken 加密存储 + http_post_form + SSRF 防护重构 + gzip 炸弹防护 + CXDA_CACHE_PYTHON 白名单 + _is_valid_user_key + 纯点文件名拒绝 |
+| cred_crypto.py | pepper 文件密钥派生 + _get_effective_username + JSON 序列化防碰撞 |
+| cxda_cache_cli.py | symlink 攻击防护 + O_NOFOLLOW 读写 + 词法路径 delete + 纯点名拒绝 + /root 黑名单移除 |
+| query.py | userKey POST 替代 GET + http_post_form |
+| requirements.txt | 新增 cryptography 锁版本 + requests 加下限 |
+
+**行为变更（需回归测试）**：`auth.py terms-decline` 需显式确认；HTTP 不跟随 redirect；老明文缓存自动加密迁移；新增 `~/.cxda-cache/.cred_pepper.bin`
+
 ### 2026-07-13 行业排名口径统一 + 接口积分优化
 
 **行业排名口径统一：**
