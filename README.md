@@ -127,10 +127,11 @@ cxdata-Company-Quality-Assessor-agent/
 
 ### 2026-09-16 修复分页参数缺失导致积分消耗异常（对齐主线/股票 agent）
 
-- **问题**：`fetch_data.py` 的 `fetch_all_pages` 硬编码 `page_size=20`，未调用 `query.py page-size` 动态获取 maxPageSize，也未传业务参数。服务端 maxPageSize 随查询条件变化（传 `stkCode` 时返回 500，不传返回 20），导致分页数量膨胀，积分消耗增加。
+- **问题**：`fetch_data.py` 的 `fetch_all_pages` 硬编码 `page_size=20`，未调用 `query.py page-size` 动态获取 maxPageSize，也未传业务参数。服务端 maxPageSize 随查询条件变化（传 `stkCode` 时返回 500，不传返回 20），导致分页数量膨胀，积分消耗增加。同时底层 `query.py` 和 `common.py` 为旧版，`cmd_page_size` 不支持传业务参数，`_fetch_api_limit_setting` 用 userKey 而非 authtoken，`check_terms_accepted` 缺少 CXDA_USER_KEY 存在性检查。
 - **修复**（参照主线分析 agent 和股票分析 agent 的改法）：
-  - 新增 `_get_max_page_size(api_id, params)` 函数，通过 subprocess 调 `query.py page-size` 传业务参数获取最优分页大小，带进程内缓存
-  - `fetch_all_pages` 去掉硬编码 `page_size=20`，改为动态获取 maxPageSize
+  - `fetch_data.py`：新增 `_get_max_page_size(api_id, params)` 函数，通过 subprocess 调 `query.py page-size` 传业务参数获取最优分页大小，带进程内缓存；`fetch_all_pages` 去掉硬编码 `page_size=20`，改为动态获取
+  - `query.py`：同步为主线版——`cmd_page_size` 支持 `params` 参数，`_fetch_api_limit_setting` 改用 authtoken + 业务参数，`_get_api_max_page_size` 缓存键按 api_id+params 组合，`page-size` 子命令支持 `key=value` 参数
+  - `common.py`：同步为主线版——`check_terms_accepted` 增加 CXDA_USER_KEY 存在性检查，`get_user_key` 移除环境变量支持（仅从缓存读）
 - **效果**：`getComFinMainIndxByCond-G` 等接口的 maxPageSize 从 20 提升至 500（25倍），分页次数和积分消耗大幅下降
 
 ### 2026-07-17 火山终版安全加固（对齐 stock agent 审计通过版本）
