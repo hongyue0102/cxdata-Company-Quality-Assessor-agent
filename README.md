@@ -125,6 +125,14 @@ cxdata-Company-Quality-Assessor-agent/
 
 ## 变更历史
 
+### 2026-09-16 修复分页参数缺失导致积分消耗异常（对齐主线/股票 agent）
+
+- **问题**：`fetch_data.py` 的 `fetch_all_pages` 硬编码 `page_size=20`，未调用 `query.py page-size` 动态获取 maxPageSize，也未传业务参数。服务端 maxPageSize 随查询条件变化（传 `stkCode` 时返回 500，不传返回 20），导致分页数量膨胀，积分消耗增加。
+- **修复**（参照主线分析 agent 和股票分析 agent 的改法）：
+  - 新增 `_get_max_page_size(api_id, params)` 函数，通过 subprocess 调 `query.py page-size` 传业务参数获取最优分页大小，带进程内缓存
+  - `fetch_all_pages` 去掉硬编码 `page_size=20`，改为动态获取 maxPageSize
+- **效果**：`getComFinMainIndxByCond-G` 等接口的 maxPageSize 从 20 提升至 500（25倍），分页次数和积分消耗大幅下降
+
 ### 2026-07-17 火山终版安全加固（对齐 stock agent 审计通过版本）
 
 参照火山客户提供的 stock-analysis-agent 终版安全加固，完整同步所有安全修复。4 个核心共享脚本从已通过审计的 stock agent 直接复制，query.py 和 requirements.txt 同步修改。

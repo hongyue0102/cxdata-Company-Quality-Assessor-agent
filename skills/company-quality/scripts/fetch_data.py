@@ -62,6 +62,36 @@ _ALLOWED_APIS = frozenset([
 ])
 
 
+_PAGE_SIZE_CACHE = {}
+
+
+def _get_max_page_size(api_id: str, params: dict = None, default: int = 1000) -> int:
+    """通过 query.py page-size 查询接口在当前业务条件下的最大返回条数。
+
+    服务端的 maxPageSize 会随查询条件变化（传 stkCode 时返回 500，不传时返回 20），
+    必须传入业务参数获取最优分页大小，否则拿到固定的小值导致分页过多。
+    """
+    cache_key = "{}:{}".format(api_id, json.dumps(params or {}, sort_keys=True))
+    if cache_key in _PAGE_SIZE_CACHE:
+        return _PAGE_SIZE_CACHE[cache_key]
+
+    try:
+        cmd = [sys.executable, str(_QUERY_SCRIPT), "page-size", api_id]
+        if params:
+            for k, v in params.items():
+                cmd.append("{}={}".format(k, v))
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=str(SCRIPT_DIR))
+        if result.returncode == 0 and result.stdout.strip():
+            data = json.loads(result.stdout)
+            mps = data.get("maxPageSize")
+            if mps and int(mps) > 0:
+                _PAGE_SIZE_CACHE[cache_key] = int(mps)
+                return int(mps)
+    except Exception as e:
+        print(f"  [WARN] 获取 {api_id} 的 maxPageSize 失败，用默认 {default}: {e}")
+    return default
+
+
 def _run_query(api_id: str, params: dict) -> dict:
     """单次 subprocess 调用 query.py api。返回解析后的 dict（含原始 status 字段）。"""
     cmd = [sys.executable, str(_QUERY_SCRIPT), "api", api_id]
@@ -157,8 +187,9 @@ def call_api(api_id: str, params: dict) -> dict:
         return {"code": "error", "result": [], "totalCount": 0}
 
 
-def fetch_all_pages(api_id: str, params: dict, page_size: int = 20) -> list:
-    """自动分页拉取全部数据。"""
+def fetch_all_pages(api_id: str, params: dict) -> list:
+    """自动分页拉取全部数据。pageSize 动态取接口最大返回条数，避免写死导致分页过多。"""
+    page_size = _get_max_page_size(api_id, params)
     all_results = []
     page = 1
     total = None
